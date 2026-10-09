@@ -253,10 +253,63 @@ def capture_step1():
 
 class CalibrationRequest(BaseModel):
     camera_height_cm: float = 50.0
-    ref_length_cm: float = 10.0
-    ref_width_cm: float = 10.0
-    ref_height_cm: float = 5.0
+    ref_length_cm: float = 6.02
+    ref_width_cm: float = 4.5
+    ref_height_cm: float = 2.5
     custom_pixels_per_cm: Optional[float] = None
+
+
+class AutoCalibrateRequest(BaseModel):
+    camera_height_cm: float = 20.0
+    ref_length_cm: float = 6.02
+    ref_width_cm: float = 4.5
+    ref_height_cm: float = 2.5
+
+
+@app.post("/api/auto_calibrate_from_camera")
+def auto_calibrate_from_camera(req: AutoCalibrateRequest):
+    """
+    Detects the calibration test piece in the live camera feed and
+    computes the exact pixel-to-cm ratio so the measured object matches
+    the user's specified reference dimensions (e.g. 6.02 cm).
+    """
+    global async_pipeline, cam_stream
+    if not async_pipeline or not async_pipeline.sync_pipeline:
+        return {"status": "error", "message": "AI Pipeline initializing..."}
+
+    ret, frame = cam_stream.read() if cam_stream else (False, None)
+    if not ret or frame is None:
+        return {"status": "error", "message": "Could not capture live camera frame."}
+
+    det = async_pipeline.sync_pipeline.dimensioner.detect_and_measure(frame)
+    if not det.get("detected", False):
+        return {
+            "status": "error",
+            "message": "No test piece detected in camera view. Please place your test piece (e.g. earbuds box) on the packing surface under the camera."
+        }
+
+    bbox = det["bbox_int"]
+    x1, y1, x2, y2 = bbox
+    pixel_w = abs(x2 - x1)
+    pixel_h = abs(y2 - y1)
+    max_pixel_dim = max(pixel_w, pixel_h)
+
+    target_ref_l = max(0.1, req.ref_length_cm)
+    computed_px_cm = round(max_pixel_dim / target_ref_l, 2)
+
+    async_pipeline.sync_pipeline.calibration_mgr.save_config(
+        pixels_per_cm=computed_px_cm,
+        camera_height_cm=req.camera_height_cm
+    )
+    async_pipeline.sync_pipeline.dimensioner.pixels_per_cm = computed_px_cm
+
+    return {
+        "status": "success",
+        "detected_pixel_dim": max_pixel_dim,
+        "ref_length_cm": target_ref_l,
+        "pixels_per_cm": computed_px_cm,
+        "measured_dimensions_str": f"{round(pixel_w / computed_px_cm, 1)} × {round(pixel_h / computed_px_cm, 1)} cm"
+    }
 
 
 @app.post("/api/calibrate_custom")
@@ -266,10 +319,10 @@ def calibrate_custom(req: CalibrationRequest):
     if not async_pipeline or not async_pipeline.sync_pipeline:
         return {"status": "error", "message": "Pipeline initializing..."}
 
-    px_cm = async_pipeline.sync_pipeline.calibration_mgr.set_web_calibration(
-        camera_height_cm=req.camera_height_cm,
-        ref_length_cm=req.ref_length_cm,
-        custom_pixels_per_cm=req.custom_pixels_per_cm
+    px_cm = req.custom_pixels_per_cm if (req.custom_pixels_per_cm and req.custom_pixels_per_cm > 0) else round(1570.0 / max(10.0, req.camera_height_cm), 2)
+    async_pipeline.sync_pipeline.calibration_mgr.save_config(
+        pixels_per_cm=px_cm,
+        camera_height_cm=req.camera_height_cm
     )
     async_pipeline.sync_pipeline.dimensioner.pixels_per_cm = px_cm
     return {

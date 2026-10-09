@@ -59,8 +59,8 @@ python -m venv .venv
 .venv\Scripts\activate  # On Windows
 source .venv/bin/activate  # On Linux/macOS
 
-# Install dependencies
-pip install fastapi uvicorn opencv-python torch torchvision transformers pillow pydantic numpy
+# Install project dependencies
+pip install -r requirements.txt
 ```
 
 ### 3. Running the Dashboard

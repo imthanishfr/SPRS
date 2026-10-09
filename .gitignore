@@ -1,24 +1,27 @@
 # Python virtual environment
+.venv
 .venv/
+.venv/*
+.venv/**
 venv/
-ENV/
+venv/*
 env/
+ENV/
 
 # Python cache & compiled files
 __pycache__/
+__pycache__/*
 *.py[cod]
 *$py.class
 *.so
 
-# PyTorch / YOLO model weights
+# PyTorch / YOLO model weights & logs
 *.pt
 *.onnx
 *.engine
+*.log
 
 # Operating System & IDE
 .DS_Store
 .idea/
 .vscode/
-
-# Local Runtime Configurations
-*.log

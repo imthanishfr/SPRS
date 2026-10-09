@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPRS — Camera Calibration Wizard</title>
+  <link rel="stylesheet" href="/static/style.css?v=20">
+  <style>
+    .cal-page-container {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+      position: relative;
+      z-index: 2;
+    }
+    
+    .cal-card {
+      background: rgba(13, 13, 13, 0.92);
+      border: 1px solid #262626;
+      border-radius: 16px;
+      padding: 36px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(34, 197, 94, 0.12);
+    }
+
+    .step-indicator {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 28px;
+    }
+
+    .step-pill {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      background: #171717;
+      color: #737373;
+      border: 1px solid #262626;
+    }
+
+    .step-pill.active {
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+      border-color: rgba(34, 197, 94, 0.4);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    @media (max-width: 640px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .video-cal-container {
+      position: relative;
+      width: 100%;
+      height: 480px;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #262626;
+      margin-bottom: 24px;
+    }
+
+    .video-cal-feed {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .cal-live-badge {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid #22c55e;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LIVE BACKGROUND WALLPAPER -->
+  <div class="bg-wallpaper-container">
+    <canvas id="bg-canvas"></canvas>
+  </div>
+
+  <div class="cal-page-container">
+    
+    <!-- HEADER BRANDING -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <div>
+        <div style="font-size: 1.5rem; font-weight: 800; color: #fff; letter-spacing: -0.5px;">SPRS Camera Calibration</div>
+        <div style="font-size: 0.88rem; color: #a3a3a3;">Industrial Optical Measurement Calibration Wizard</div>
+      </div>
+      <a href="/" style="color: #737373; font-size: 0.88rem; text-decoration: none; padding: 8px 16px; border: 1px solid #262626; border-radius: 8px;">Skip & Return to Dashboard</a>
+    </div>
+
+    <!-- MAIN CALIBRATION CARD -->
+    <div class="cal-card">
+      
+      <!-- STEP INDICATOR -->
+      <div class="step-indicator">
+        <span class="step-pill active" id="pill-step-1">1. Set Camera & Test Piece Specs</span>
+        <span style="color: #404040;">→</span>
+        <span class="step-pill" id="pill-step-2">2. Live Camera Alignment & Verification</span>
+      </div>
+
+      <!-- STEP 1: SPECIFICATION FORM -->
+      <div id="cal-step-1">
+        <div style="font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 6px;">Camera & Reference Test Piece Setup</div>
+        <div style="font-size: 0.88rem; color: #a3a3a3; margin-bottom: 24px; line-height: 1.5;">
+          Specify the camera height distance to your workspace surface and the known physical dimensions of your test calibration object.
+        </div>
+
+        <div class="form-grid">
+          
+          <div style="grid-column: span 2;">
+            <label style="font-size: 0.88rem; font-weight: 600; color: #e5e5e5; display: block; margin-bottom: 8px;">
+              Camera Mounting Height / Distance to Surface (cm):
+            </label>
+            <input type="number" id="input-cam-height" value="50.0" step="0.5" class="cal-input-field" style="font-size: 1rem; padding: 12px 16px;">
+            <div style="font-size: 0.78rem; color: #737373; margin-top: 4px;">Vertical distance from camera lens to table surface grid.</div>
+          </div>
+
+          <div>
+            <label style="font-size: 0.88rem; font-weight: 600; color: #e5e5e5; display: block; margin-bottom: 8px;">
+              Test Piece Length (L cm):
+            </label>
+            <input type="number" id="input-ref-l" value="10.0" step="0.1" class="cal-input-field" placeholder="10.0">
+          </div>
+
+          <div>
+            <label style="font-size: 0.88rem; font-weight: 600; color: #e5e5e5; display: block; margin-bottom: 8px;">
+              Test Piece Width (W cm):
+            </label>
+            <input type="number" id="input-ref-w" value="10.0" step="0.1" class="cal-input-field" placeholder="10.0">
+          </div>
+
+          <div style="grid-column: span 2;">
+            <label style="font-size: 0.88rem; font-weight: 600; color: #e5e5e5; display: block; margin-bottom: 8px;">
+              Test Piece Height (H cm):
+            </label>
+            <input type="number" id="input-ref-h" value="5.0" step="0.1" class="cal-input-field" placeholder="5.0">
+          </div>
+
+        </div>
+
+        <button class="btn-capture" style="width: 100%; padding: 16px; font-size: 1rem;" onclick="goToCameraStep()">
+          Proceed to Live Camera Calibration View →
+        </button>
+      </div>
+
+      <!-- STEP 2: LIVE CAMERA CALIBRATION PANEL -->
+      <div id="cal-step-2" style="display: none;">
+        <div style="font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 6px;">Live Camera Calibration & Verification</div>
+        <div style="font-size: 0.88rem; color: #a3a3a3; margin-bottom: 18px;">
+          Place your test piece under the camera view. The system verifies real-time contour bounding against your target specs.
+        </div>
+
+        <div class="video-cal-container">
+          <img src="/video_feed" alt="Live Stream" class="video-cal-feed" id="cal-video-feed">
+          
+          <div class="cal-live-badge">
+            <div style="font-weight: 700; color: #22c55e; margin-bottom: 4px;" id="target-spec-text">Target: 10.0 × 10.0 × 5.0 cm</div>
+            <div style="font-size: 0.82rem; color: #d4d4d4;" id="computed-scale-text">Calculated Scale: Checking live stream...</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 14px;">
+          <button class="btn-capture" style="flex: 2; padding: 16px; font-size: 1rem;" onclick="confirmAndSaveCalibration()">
+            Confirm & Save Calibration →
+          </button>
+          <button class="btn-capture btn-capture-secondary" style="flex: 1; padding: 16px;" onclick="backToStep1()">
+            Back to Form
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    // Live Abstract Wave Wallpaper Background Animation
+    const canvas = document.getElementById("bg-canvas");
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      let w = (canvas.width = window.innerWidth);
+      let h = (canvas.height = window.innerHeight);
+
+      window.addEventListener("resize", () => {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+      });
+
+      let step = 0;
+      function renderWave() {
+        ctx.fillStyle = "#050505";
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 5; i++) {
+          ctx.beginPath();
+          const opacity = 0.08 - i * 0.012;
+          ctx.strokeStyle = `rgba(34, 197, 94, ${Math.max(0.01, opacity)})`;
+
+          for (let x = 0; x < w; x += 15) {
+            const y = Math.sin(x * 0.003 + step + i * 0.4) * 60 + h * (0.45 + i * 0.08);
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        step += 0.008;
+        requestAnimationFrame(renderWave);
+      }
+      renderWave();
+    }
+
+    function goToCameraStep() {
+      const camH = parseFloat(document.getElementById("input-cam-height").value || 50);
+      const refL = parseFloat(document.getElementById("input-ref-l").value || 10);
+      const refW = parseFloat(document.getElementById("input-ref-w").value || 10);
+      const refH = parseFloat(document.getElementById("input-ref-h").value || 5);
+
+      document.getElementById("target-spec-text").innerText = `Target Test Piece: ${refL} × ${refW} × ${refH} cm`;
+      
+      // Calculate scale based on focal length model (1570 / distance)
+      const scale = (1570.0 / Math.max(10.0, camH)).toFixed(2);
+      document.getElementById("computed-scale-text").innerText = `Calculated Optical Scale: ${scale} px/cm`;
+
+      document.getElementById("cal-step-1").style.display = "none";
+      document.getElementById("cal-step-2").style.display = "block";
+
+      document.getElementById("pill-step-1").classList.remove("active");
+      document.getElementById("pill-step-2").classList.add("active");
+    }
+
+    function backToStep1() {
+      document.getElementById("cal-step-2").style.display = "none";
+      document.getElementById("cal-step-1").style.display = "block";
+
+      document.getElementById("pill-step-2").classList.remove("active");
+      document.getElementById("pill-step-1").classList.add("active");
+    }
+
+    async function confirmAndSaveCalibration() {
+      const camH = parseFloat(document.getElementById("input-cam-height").value || 50);
+      const refL = parseFloat(document.getElementById("input-ref-l").value || 10);
+      const refW = parseFloat(document.getElementById("input-ref-w").value || 10);
+      const refH = parseFloat(document.getElementById("input-ref-h").value || 5);
+
+      try {
+        const res = await fetch("/api/calibrate_custom", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            camera_height_cm: camH,
+            ref_length_cm: refL,
+            ref_width_cm: refW,
+            ref_height_cm: refH
+          })
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          console.log("[SPRS Calibration] Saved calibration successfully!");
+        }
+      } catch (err) {
+        console.warn("[SPRS Calibration Error]:", err);
+      }
+
+      // Redirect back to main scan page
+      window.location.href = "/";
+    }
+  </script>
+
+</body>
+</html>

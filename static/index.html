@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPRS — Smart Packaging Recommendation System</title>
+  <link rel="stylesheet" href="/static/style.css?v=12">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+  <!-- LIVE ANIMATED ABSTRACT WAVE WALLPAPER (IMAGE 2) -->
+  <div class="bg-wallpaper-container">
+    <canvas id="bg-canvas"></canvas>
+  </div>
+
+  <!-- MAIN APPLICATION VIEWPORT -->
+  <div class="app-viewport-container">
+    
+    <!-- CAMERA CONTAINER CARD (HEIGHT: 520px) -->
+    <div class="camera-card">
+      <div class="video-frame-box">
+        <img src="/video_feed" alt="Camera Feed" class="video-element" id="live-stream">
+      </div>
+    </div>
+
+    <!-- SINGLE CONTROL BAR BELOW CAMERA -->
+    <div class="control-bar">
+      <div>
+        <div class="instruction-text" id="status-main-title">Step 1: Place Product Flat</div>
+        <div class="instruction-sub" id="status-sub-title">Position object flat under camera view and click Capture Image below.</div>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-capture" id="btn-primary-capture" onclick="handleMainCapture()">Capture Image</button>
+        <button class="btn-capture btn-capture-secondary" onclick="resetScan()">Reset</button>
+        <a href="/calibrate" class="btn-capture btn-capture-secondary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Calibrate Camera</a>
+      </div>
+    </div>
+
+    <!-- ADVANCED ANALYTICS SECTION -->
+    <div class="analytics-section" id="analytics-panel">
+      <div class="section-title">Advanced Packaging Analytics & Metrics</div>
+
+      <!-- ROW 1: SNAPSHOT & VERIFIED PRODUCT METRICS -->
+      <div class="analytics-row-pair">
+        <div class="data-box" style="text-align: center; display: flex; flex-direction: column; justify-content: center;">
+          <div class="data-label" style="margin-bottom: 10px; font-weight: 600; color: #fff;">Scanned Product Snapshot</div>
+          <div class="snapshot-container">
+            <img src="" id="panel-snapshot" class="snapshot-img" alt="Scanned Crop">
+          </div>
+        </div>
+
+        <div class="data-box" style="display: flex; flex-direction: column; justify-content: center;">
+          <div class="data-label" style="font-weight: 700; color: #fff; margin-bottom: 14px; font-size: 1rem;">Verified Product Metrics</div>
+          <div class="data-row">
+            <span class="data-label">Dimensions (L x W x H)</span>
+            <span class="data-val" id="panel-dims">-</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Object Volume</span>
+            <span class="data-val" id="panel-vol">-</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Estimated Object Weight</span>
+            <span class="data-val" id="panel-obj-weight">-</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">AI Category Match</span>
+            <span class="data-val" id="panel-category">-</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROW 2: PACKAGING BOX INFO & DEDICATED BIG SPACE UTILIZATION GAUGE -->
+      <div class="analytics-row-pair">
+        <div class="data-box" style="display: flex; flex-direction: column; justify-content: center;">
+          <div class="data-label" style="font-weight: 700; color: #fff; margin-bottom: 14px; font-size: 1rem;">Packaging Box Information</div>
+          <div class="data-row">
+            <span class="data-label">Cardboard Grade</span>
+            <span class="data-val" id="panel-cardboard">-</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Optimal Custom Box</span>
+            <span class="data-val" id="panel-opt-box">-</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Stock Box Match</span>
+            <span class="data-val" id="panel-stock-box">-</span>
+          </div>
+        </div>
+
+        <div class="data-box" style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;">
+          <div class="data-label" style="font-weight: 700; color: #fff; margin-bottom: 12px; font-size: 1rem;">Space Utilization Efficiency</div>
+          
+          <!-- DUAL CIRCULAR RING GAUGES (OPTIMAL VS STOCK BOX) -->
+          <div class="dual-rings-wrapper">
+            
+            <!-- OPTIMAL CUSTOM BOX RING -->
+            <div class="ring-sub-box">
+              <div class="ring-sub-title">Optimal Custom Box</div>
+              <div class="medium-ring-container">
+                <svg class="medium-ring-svg" viewBox="0 0 120 120">
+                  <circle class="medium-ring-bg" cx="60" cy="60" r="48"></circle>
+                  <circle class="medium-ring-fill" id="panel-opt-ring-circle" cx="60" cy="60" r="48"></circle>
+                </svg>
+                <div class="medium-ring-text" id="panel-opt-ring-text">0%</div>
+              </div>
+              <div class="util-subtext" id="panel-opt-subtext">Custom Tailored</div>
+            </div>
+
+            <!-- WAREHOUSE STOCK BOX MATCH RING -->
+            <div class="ring-sub-box">
+              <div class="ring-sub-title">Warehouse Stock Box</div>
+              <div class="medium-ring-container">
+                <svg class="medium-ring-svg" viewBox="0 0 120 120">
+                  <circle class="medium-ring-bg" cx="60" cy="60" r="48"></circle>
+                  <circle class="medium-ring-fill" id="panel-stock-ring-circle" cx="60" cy="60" r="48"></circle>
+                </svg>
+                <div class="medium-ring-text" id="panel-stock-ring-text">0%</div>
+              </div>
+              <div class="util-subtext" id="panel-stock-subtext">Inventory Fit</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ROW 3: FILLING & TOTAL WEIGHT (STANDALONE CARD) -->
+      <div class="data-box" style="margin-bottom: 20px;">
+        <div class="data-label" style="font-weight: 700; color: #fff; margin-bottom: 14px; font-size: 1rem;">Filling & Total Weight</div>
+        <div class="data-row">
+          <span class="data-label">Recommended Void Fill</span>
+          <span class="data-val" id="panel-fill-name">-</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">Void Fill Volume</span>
+          <span class="data-val" id="panel-fill-vol">-</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">Filling Material Weight</span>
+          <span class="data-val" id="panel-fill-weight">-</span>
+        </div>
+        <div class="data-row" style="border-top: 1px solid #262626; padding-top: 12px; margin-top: 10px;">
+          <span class="data-label" style="font-weight: 700; color: #fff;">TOTAL PACKAGED WEIGHT</span>
+          <span class="data-val" style="font-size: 1.15rem; color: #ffffff;" id="panel-total-weight">-</span>
+        </div>
+      </div>
+
+      <!-- ROW 4: LARGE 3D PACKING VISUALIZATION PANEL (520px HEIGHT) -->
+      <div class="large-3d-viewer-card">
+        <div style="font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Interactive 3D Box & Item Packing Model</span>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Click any 3D component to inspect material details</span>
+        </div>
+
+        <div class="threejs-viewport-large">
+          <canvas id="canvas-3d"></canvas>
+          
+          <!-- CLICK INSPECTOR OVERLAY -->
+          <div class="inspector-overlay" id="inspector-overlay">
+            <div class="inspector-title" id="inspector-title">3D Interactive Inspector</div>
+            <div class="inspector-desc" id="inspector-desc">Click on the cardboard box, product item, or filling cushion to view specs.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM ACTION BAR CENTERED -->
+      <div class="bottom-action-bar">
+        <div class="status-tag status-tag-centered" id="panel-handling-instruction">-</div>
+
+        <div class="bottom-btn-group">
+          <button class="btn-capture" style="padding: 12px 32px;" onclick="window.print()">Print Shipping Label</button>
+          <button class="btn-capture btn-capture-secondary" style="padding: 12px 32px;" onclick="resetScan()">Scan Next Product</button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="/static/app.js?v=16"></script>
+</body>
+</html>

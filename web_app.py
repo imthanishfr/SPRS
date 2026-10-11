@@ -266,6 +266,24 @@ class AutoCalibrateRequest(BaseModel):
     ref_height_cm: float = 2.5
 
 
+@app.get("/api/check_tilt_alignment")
+def check_tilt_alignment():
+    """
+    Estimates camera tilt relative to the measuring/cutting mat grid lines
+    from the current live video frame.
+    """
+    global cam_stream, async_pipeline
+    if not cam_stream:
+        return {"status": "error", "message": "Camera stream not initialized"}
+    ret, frame = cam_stream.read()
+    if not ret or frame is None:
+        return {"status": "error", "message": "Could not read camera frame"}
+
+    from sprs.calibration import CalibrationManager
+    tilt_info = CalibrationManager.estimate_camera_tilt(frame)
+    return {"status": "success", "tilt": tilt_info}
+
+
 @app.post("/api/auto_calibrate_from_camera")
 def auto_calibrate_from_camera(req: AutoCalibrateRequest):
     """

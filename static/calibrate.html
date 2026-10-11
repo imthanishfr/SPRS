@@ -3,31 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SPRS — Camera Calibration Page</title>
-  <link rel="stylesheet" href="/static/style.css?v=25">
+  <title>SPRS — Camera Calibration & Tilt Alignment Wizard</title>
+  <link rel="stylesheet" href="/static/style.css?v=30">
   <style>
     .cal-page-container {
-      max-width: 920px;
-      margin: 40px auto;
+      max-width: 960px;
+      margin: 36px auto;
       padding: 0 20px;
       position: relative;
       z-index: 2;
     }
     
     .cal-card {
-      background: rgba(13, 13, 13, 0.94);
+      background: rgba(13, 13, 13, 0.95);
       border: 1px solid #262626;
       border-radius: 16px;
-      padding: 36px;
+      padding: 34px;
       backdrop-filter: blur(14px);
       box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(34, 197, 94, 0.12);
     }
 
     .step-indicator {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
-      margin-bottom: 28px;
+      margin-bottom: 26px;
+      flex-wrap: wrap;
     }
 
     .step-pill {
@@ -38,19 +39,27 @@
       background: #171717;
       color: #737373;
       border: 1px solid #262626;
+      transition: all 0.25s ease;
     }
 
     .step-pill.active {
       background: rgba(34, 197, 94, 0.15);
       color: #22c55e;
-      border-color: rgba(34, 197, 94, 0.4);
+      border-color: rgba(34, 197, 94, 0.5);
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.2);
+    }
+
+    .step-pill.completed {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border-color: rgba(56, 189, 248, 0.4);
     }
 
     .form-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 20px;
-      margin-bottom: 28px;
+      margin-bottom: 26px;
     }
 
     @media (max-width: 640px) {
@@ -67,13 +76,109 @@
       border-radius: 12px;
       overflow: hidden;
       border: 1px solid #262626;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
     .video-cal-feed {
       width: 100%;
       height: 100%;
       object-fit: contain;
+    }
+
+    /* TILT ALIGNMENT RETICLES OVERLAY */
+    .alignment-reticle-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .reticle-h-line {
+      position: absolute;
+      width: 100%;
+      height: 1px;
+      background: rgba(34, 197, 94, 0.45);
+      box-shadow: 0 0 4px rgba(34, 197, 94, 0.6);
+    }
+
+    .reticle-v-line {
+      position: absolute;
+      width: 1px;
+      height: 100%;
+      background: rgba(34, 197, 94, 0.45);
+      box-shadow: 0 0 4px rgba(34, 197, 94, 0.6);
+    }
+
+    .reticle-grid-box {
+      width: 65%;
+      height: 65%;
+      border: 1px dashed rgba(34, 197, 94, 0.35);
+      position: absolute;
+    }
+
+    .reticle-center-circle {
+      width: 60px;
+      height: 60px;
+      border: 2px solid #22c55e;
+      border-radius: 50%;
+      position: absolute;
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+    }
+
+    /* DIGITAL SPIRIT LEVEL BADGE */
+    .tilt-hud-card {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.88);
+      border: 1px solid #22c55e;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      color: #fff;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      min-width: 260px;
+    }
+
+    .spirit-level-bar {
+      width: 100%;
+      height: 10px;
+      background: #171717;
+      border-radius: 5px;
+      border: 1px solid #333;
+      margin-top: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .spirit-level-bubble {
+      width: 16px;
+      height: 8px;
+      background: #22c55e;
+      border-radius: 4px;
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      transition: left 0.2s ease, background 0.2s ease;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
+    }
+
+    .spirit-center-mark {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 2px;
+      height: 10px;
+      background: #fff;
+      transform: translateX(-50%);
+      z-index: 2;
     }
 
     .cal-live-badge {
@@ -120,10 +225,10 @@
   <div class="cal-page-container">
     
     <!-- HEADER BRANDING -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px;">
       <div>
-        <div style="font-size: 1.5rem; font-weight: 800; color: #fff; letter-spacing: -0.5px;">SPRS Camera Calibration</div>
-        <div style="font-size: 0.88rem; color: #a3a3a3;">Industrial Optical Scale Calibration Wizard (Separate Page)</div>
+        <div style="font-size: 1.55rem; font-weight: 800; color: #fff; letter-spacing: -0.5px;">SPRS Camera Calibration & Alignment</div>
+        <div style="font-size: 0.88rem; color: #a3a3a3;">Measuring Mat Precision Alignment & Optical Scale Calibration</div>
       </div>
       <a href="/" style="color: #737373; font-size: 0.88rem; text-decoration: none; padding: 8px 16px; border: 1px solid #262626; border-radius: 8px;">Skip to Main Scan Page →</a>
     </div>
@@ -133,26 +238,30 @@
       
       <!-- STEP INDICATOR -->
       <div class="step-indicator">
-        <span class="step-pill active" id="pill-step-1">STEP 1: Enter Camera Distance & Test Piece Specs</span>
+        <span class="step-pill active" id="pill-step-1">1. Enter Measurement Values</span>
         <span style="color: #404040;">→</span>
-        <span class="step-pill" id="pill-step-2">STEP 2: Live Camera Capture & Pixel Locking</span>
+        <span class="step-pill" id="pill-step-2">2. Camera Tilt Alignment</span>
+        <span style="color: #404040;">→</span>
+        <span class="step-pill" id="pill-step-3">3. Test Piece Capture</span>
       </div>
 
-      <!-- STEP 1: SPECIFICATION FORM -->
+      <!-- ==========================================
+           STEP 1: SPECIFICATION FORM
+           ========================================== -->
       <div id="cal-step-1">
-        <div style="font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 6px;">Camera & Test Piece Specification</div>
+        <div style="font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 6px;">Step 1: Enter Calibration & Mat Parameters</div>
         <div style="font-size: 0.88rem; color: #a3a3a3; margin-bottom: 24px; line-height: 1.5;">
-          Enter your camera overhead distance and the physical dimensions of your test calibration object (e.g. Earbuds Box).
+          Provide the vertical camera distance from the measuring mat and the known dimensions of your test piece (e.g. Earbuds Box).
         </div>
 
         <div class="form-grid">
           
           <div style="grid-column: span 2;">
             <label style="font-size: 0.88rem; font-weight: 600; color: #e5e5e5; display: block; margin-bottom: 8px;">
-              Camera Distance / Mounting Height to Surface (cm):
+              Camera Distance / Mounting Height to Measuring Mat (cm):
             </label>
             <input type="number" id="input-cam-height" value="20.0" step="0.5" class="cal-input-field" style="font-size: 1rem; padding: 12px 16px;">
-            <div style="font-size: 0.78rem; color: #737373; margin-top: 4px;">Overhead distance from camera lens down to packing surface plane.</div>
+            <div style="font-size: 0.78rem; color: #737373; margin-top: 4px;">Vertical distance from camera lens down to the measuring mat surface.</div>
           </div>
 
           <div>
@@ -178,26 +287,73 @@
 
         </div>
 
-        <button class="btn-capture" style="width: 100%; padding: 16px; font-size: 1rem;" onclick="goToCameraStep()">
-          Proceed to Live Camera Calibration View →
+        <button class="btn-capture" style="width: 100%; padding: 16px; font-size: 1rem;" onclick="goToTiltStep()">
+          Proceed to Camera Tilt Alignment →
         </button>
       </div>
 
-      <!-- STEP 2: LIVE CAMERA CALIBRATION PANEL -->
+      <!-- ==========================================
+           STEP 2: CAMERA TILT ALIGNMENT (NEW FEATURE)
+           ========================================== -->
       <div id="cal-step-2" style="display: none;">
-        <div style="font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 6px;">Live Camera Calibration & Scale Locking</div>
+        <div style="font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 6px;">Step 2: Camera Tilt Alignment with Measuring Mat</div>
+        <div style="font-size: 0.88rem; color: #a3a3a3; margin-bottom: 18px; line-height: 1.45;">
+          Align your camera overhead until the measuring mat grid lines are square with the reticle. Adjust tilt until the digital spirit level shows <b>PERFECTLY ALIGNED</b>.
+        </div>
+
+        <div class="video-cal-container">
+          <img src="/video_feed" alt="Live Stream" class="video-cal-feed" id="cal-tilt-video-feed">
+          
+          <!-- RETICLES & GRID OVERLAY FOR CUTTING MAT ALIGNMENT -->
+          <div class="alignment-reticle-overlay">
+            <div class="reticle-h-line"></div>
+            <div class="reticle-v-line"></div>
+            <div class="reticle-grid-box"></div>
+            <div class="reticle-center-circle"></div>
+          </div>
+
+          <!-- DIGITAL SPIRIT LEVEL HUD -->
+          <div class="tilt-hud-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span style="font-weight: 700; color: #fff;">Digital Tilt Level</span>
+              <span style="font-weight: 700; color: #22c55e;" id="tilt-angle-display">0.0°</span>
+            </div>
+            <div style="font-size: 0.80rem; color: #a3a3a3;" id="tilt-status-display">Checking Mat Grid...</div>
+            
+            <div class="spirit-level-bar">
+              <div class="spirit-center-mark"></div>
+              <div class="spirit-level-bubble" id="spirit-bubble"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 14px;">
+          <button class="btn-capture" style="flex: 2; padding: 16px; font-size: 1rem;" onclick="goToCaptureStep()">
+            ✓ Camera Tilt Aligned (OK) — Proceed to Test Capture →
+          </button>
+          <button class="btn-capture btn-capture-secondary" style="flex: 1; padding: 16px;" onclick="backToStep1()">
+            Back to Step 1
+          </button>
+        </div>
+      </div>
+
+      <!-- ==========================================
+           STEP 3: TEST PIECE CAPTURE & VERIFICATION
+           ========================================== -->
+      <div id="cal-step-3" style="display: none;">
+        <div style="font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 6px;">Step 3: Test Piece Capture & Scale Locking</div>
         <div style="font-size: 0.88rem; color: #a3a3a3; margin-bottom: 18px;">
-          Place your test piece (e.g. Earbuds Box) under the camera. The system will detect its pixel contours and compute the exact scale ($px/cm$).
+          Place your test piece (e.g. Earbuds Box) flat onto the measuring mat. Click capture to detect pixels and verify dimensions.
         </div>
 
         <div class="cal-alert-box cal-alert-success" id="cal-msg-box"></div>
 
         <div class="video-cal-container">
-          <img src="/video_feed" alt="Live Stream" class="video-cal-feed" id="cal-video-feed">
+          <img src="/video_feed" alt="Live Stream" class="video-cal-feed" id="cal-capture-video-feed">
           
           <div class="cal-live-badge">
             <div style="font-weight: 700; color: #22c55e; margin-bottom: 4px;" id="target-spec-text">Target: 6.02 × 4.5 × 2.5 cm</div>
-            <div style="font-size: 0.84rem; color: #e5e5e5; margin-bottom: 2px;" id="computed-scale-text">Calculated Scale: Press Detect & Calibrate</div>
+            <div style="font-size: 0.84rem; color: #e5e5e5; margin-bottom: 2px;" id="computed-scale-text">Calculated Scale: Press Detect & Lock Scale</div>
             <div style="font-size: 0.80rem; color: #38bdf8;" id="measured-result-text">Live Match: Pending...</div>
           </div>
         </div>
@@ -206,13 +362,13 @@
           <button class="btn-capture" style="flex: 2; padding: 14px; font-size: 0.95rem; background: #2563eb;" onclick="triggerAutoCameraCalibration()">
             📸 Detect Test Piece & Lock Scale ($px/cm$)
           </button>
-          <button class="btn-capture btn-capture-secondary" style="flex: 1; padding: 14px;" onclick="backToStep1()">
-            Back to Form
+          <button class="btn-capture btn-capture-secondary" style="flex: 1; padding: 14px;" onclick="backToStep2()">
+            Back to Tilt Alignment
           </button>
         </div>
 
         <button class="btn-capture" style="width: 100%; padding: 16px; font-size: 1.05rem;" id="btn-confirm-redirect" onclick="confirmAndSaveCalibration()">
-          Confirm Calibration & Redirect to Main Scan Page →
+          Confirm Calibration & Proceed to Main Scan Page →
         </button>
       </div>
 
@@ -257,7 +413,34 @@
       renderWave();
     }
 
-    function goToCameraStep() {
+    let tiltPollingInterval = null;
+
+    // STEP TRANSITION 1 -> 2 (Tilt Alignment)
+    function goToTiltStep() {
+      document.getElementById("cal-step-1").style.display = "none";
+      document.getElementById("cal-step-2").style.display = "block";
+      document.getElementById("cal-step-3").style.display = "none";
+
+      document.getElementById("pill-step-1").className = "step-pill completed";
+      document.getElementById("pill-step-2").className = "step-pill active";
+      document.getElementById("pill-step-3").className = "step-pill";
+
+      startTiltPolling();
+    }
+
+    function backToStep1() {
+      stopTiltPolling();
+      document.getElementById("cal-step-2").style.display = "none";
+      document.getElementById("cal-step-1").style.display = "block";
+
+      document.getElementById("pill-step-1").className = "step-pill active";
+      document.getElementById("pill-step-2").className = "step-pill";
+    }
+
+    // STEP TRANSITION 2 -> 3 (Capture Step)
+    function goToCaptureStep() {
+      stopTiltPolling();
+
       const camH = parseFloat(document.getElementById("input-cam-height").value || 20);
       const refL = parseFloat(document.getElementById("input-ref-l").value || 6.02);
       const refW = parseFloat(document.getElementById("input-ref-w").value || 4.5);
@@ -265,24 +448,74 @@
 
       document.getElementById("target-spec-text").innerText = `Target Test Piece: ${refL} × ${refW} × ${refH} cm`;
 
-      document.getElementById("cal-step-1").style.display = "none";
-      document.getElementById("cal-step-2").style.display = "block";
+      document.getElementById("cal-step-2").style.display = "none";
+      document.getElementById("cal-step-3").style.display = "block";
 
-      document.getElementById("pill-step-1").classList.remove("active");
-      document.getElementById("pill-step-2").classList.add("active");
+      document.getElementById("pill-step-2").className = "step-pill completed";
+      document.getElementById("pill-step-3").className = "step-pill active";
 
-      // Auto trigger live scale calculation on step transition
       setTimeout(triggerAutoCameraCalibration, 400);
     }
 
-    function backToStep1() {
-      document.getElementById("cal-step-2").style.display = "none";
-      document.getElementById("cal-step-1").style.display = "block";
+    function backToStep2() {
+      document.getElementById("cal-step-3").style.display = "none";
+      document.getElementById("cal-step-2").style.display = "block";
 
-      document.getElementById("pill-step-2").classList.remove("active");
-      document.getElementById("pill-step-1").classList.add("active");
+      document.getElementById("pill-step-2").className = "step-pill active";
+      document.getElementById("pill-step-3").className = "step-pill";
+
+      startTiltPolling();
     }
 
+    // LIVE TILT ALIGNMENT POLLING
+    function startTiltPolling() {
+      stopTiltPolling();
+      checkTilt();
+      tiltPollingInterval = setInterval(checkTilt, 500);
+    }
+
+    function stopTiltPolling() {
+      if (tiltPollingInterval) {
+        clearInterval(tiltPollingInterval);
+        tiltPollingInterval = null;
+      }
+    }
+
+    async function checkTilt() {
+      try {
+        const res = await fetch("/api/check_tilt_alignment");
+        const data = await res.json();
+        if (data.status === "success" && data.tilt) {
+          const angle = data.tilt.tilt_angle_deg || 0;
+          const status = data.tilt.status || "ALIGNED";
+          const isAligned = data.tilt.is_aligned;
+
+          const angleDisplay = document.getElementById("tilt-angle-display");
+          const statusDisplay = document.getElementById("tilt-status-display");
+          const bubble = document.getElementById("spirit-bubble");
+
+          angleDisplay.innerText = `${angle > 0 ? "+" : ""}${angle.toFixed(1)}°`;
+          statusDisplay.innerText = status;
+
+          // Animate bubble position (-10° to +10° mapped to 10% to 90%)
+          const clampedAngle = Math.max(-10, Math.min(10, angle));
+          const bubblePosPct = 50 + (clampedAngle / 10) * 40;
+          bubble.style.left = `${bubblePosPct}%`;
+
+          if (isAligned) {
+            angleDisplay.style.color = "#22c55e";
+            bubble.style.background = "#22c55e";
+          } else {
+            angleDisplay.style.color = "#ef4444";
+            bubble.style.background = "#ef4444";
+          }
+        }
+      } catch (err) {
+        console.warn("Tilt polling warning:", err);
+      }
+    }
+
+    // AUTO CAMERA CALIBRATION (STEP 3)
     async function triggerAutoCameraCalibration() {
       const camH = parseFloat(document.getElementById("input-cam-height").value || 20);
       const refL = parseFloat(document.getElementById("input-ref-l").value || 6.02);
@@ -314,10 +547,10 @@
           msgBox.style.display = "block";
         } else {
           document.getElementById("computed-scale-text").innerText = "Calculated Scale: Pending Detection";
-          document.getElementById("measured-result-text").innerText = "Live Match: Please place test piece under camera";
+          document.getElementById("measured-result-text").innerText = "Live Match: Please place test piece on measuring mat";
 
           msgBox.className = "cal-alert-box cal-alert-error";
-          msgBox.innerText = data.message || "Could not detect test piece. Ensure object is on surface plane under camera.";
+          msgBox.innerText = data.message || "Could not detect test piece. Ensure object is on cutting mat under camera.";
           msgBox.style.display = "block";
         }
       } catch (err) {
@@ -326,7 +559,6 @@
     }
 
     async function confirmAndSaveCalibration() {
-      // Scale is locked and saved in config, redirect directly to main scanning page
       window.location.href = "/";
     }
   </script>

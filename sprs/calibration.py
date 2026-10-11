@@ -165,3 +165,67 @@ class CalibrationManager:
             elif key in [27, ord('q'), ord('Q')]:  # ESC or Q
                 cv2.destroyWindow(window_name)
                 return None
+
+    @staticmethod
+    def estimate_camera_tilt(frame: np.ndarray) -> Dict[str, Any]:
+        """
+        Estimates camera tilt/skew relative to measuring/cutting mat grid lines.
+        Uses Canny edge detection + Hough Line Transform to detect dominant grid line angles.
+        """
+        if frame is None or frame.size == 0:
+            return {"tilt_angle_deg": 0.0, "is_aligned": False, "status": "No camera feed", "line_count": 0}
+
+        try:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+            edges = cv2.Canny(blurred, 40, 120, apertureSize=3)
+
+            lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=70, minLineLength=50, maxLineGap=12)
+
+            angles = []
+            if lines is not None:
+                for line in lines:
+                    coords = line.ravel()
+                    if len(coords) < 4:
+                        continue
+                    x1, y1, x2, y2 = coords[:4]
+                    dx = float(x2 - x1)
+                    dy = float(y2 - y1)
+                    if dx == 0:
+                        angle_deg = 90.0
+                    else:
+                        angle_deg = float(np.degrees(np.arctan2(dy, dx)))
+
+                    norm = angle_deg % 90
+                    if norm > 45:
+                        norm -= 90
+                    angles.append(norm)
+
+            if len(angles) >= 4:
+                median_angle = float(np.median(angles))
+                tilt_deg = round(median_angle, 1)
+                abs_tilt = abs(tilt_deg)
+                if abs_tilt <= 1.0:
+                    status = "PERFECTLY ALIGNED"
+                    is_aligned = True
+                elif abs_tilt <= 3.0:
+                    status = f"MINOR SKEW ({tilt_deg:+.1f}°) — ACCEPTABLE"
+                    is_aligned = True
+                else:
+                    status = f"TILTED BY {tilt_deg:+.1f}° — ADJUST CAMERA"
+                    is_aligned = False
+                return {
+                    "tilt_angle_deg": tilt_deg,
+                    "is_aligned": is_aligned,
+                    "status": status,
+                    "line_count": len(angles)
+                }
+            else:
+                return {
+                    "tilt_angle_deg": 0.0,
+                    "is_aligned": True,
+                    "status": "ALIGN TO GRID / RETICLE",
+                    "line_count": len(angles) if angles else 0
+                }
+        except Exception as e:
+            return {"tilt_angle_deg": 0.0, "is_aligned": True, "status": f"Ready: {e}", "line_count": 0}

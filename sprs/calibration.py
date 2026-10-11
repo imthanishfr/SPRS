@@ -229,3 +229,65 @@ class CalibrationManager:
                 }
         except Exception as e:
             return {"tilt_angle_deg": 0.0, "is_aligned": True, "status": f"Ready: {e}", "line_count": 0}
+
+    @staticmethod
+    def detect_mat_grid_pixels_per_cm(frame: np.ndarray, expected_interval_cm: float = 1.0) -> Optional[float]:
+        """
+        Automatically detects the Levin A4 cutting mat's printed grid lines (1.0 cm spacing)
+        and computes the exact pixel-to-cm ratio.
+        """
+        if frame is None or frame.size == 0:
+            return None
+        try:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+            edges = cv2.Canny(blurred, 40, 130)
+            lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=60, minLineLength=50, maxLineGap=12)
+            if lines is None or len(lines) < 8:
+                return None
+            
+            h_lines, v_lines = [], []
+            for line in lines:
+                coords = line.ravel()
+                if len(coords) < 4:
+                    continue
+                x1, y1, x2, y2 = coords[:4]
+                dx = float(x2 - x1)
+                dy = float(y2 - y1)
+                angle = np.abs(np.degrees(np.arctan2(dy, dx)))
+                if angle < 6 or angle > 174:
+                    h_lines.append((float(y1) + float(y2)) / 2.0)
+                elif 84 < angle < 96:
+                    v_lines.append((float(x1) + float(x2)) / 2.0)
+
+            def compute_spacing(coords: List[float]) -> List[float]:
+                if len(coords) < 5:
+                    return []
+                coords = np.sort(coords)
+                clustered = [coords[0]]
+                for c in coords[1:]:
+                    if c - clustered[-1] > 6:
+                        clustered.append(c)
+                    else:
+                        clustered[-1] = (clustered[-1] + c) / 2.0
+                diffs = np.diff(clustered)
+                return [float(d) for d in diffs if 8.0 < d < 250.0]
+
+            h_diffs = compute_spacing(h_lines)
+            v_diffs = compute_spacing(v_lines)
+            all_diffs = h_diffs + v_diffs
+            if not all_diffs:
+                return None
+
+            med_spacing = float(np.median(all_diffs))
+            lower = [d for d in all_diffs if 0.45 * med_spacing <= d <= 0.75 * med_spacing]
+            if len(lower) >= 4:
+                med_spacing = float(np.median(lower))
+
+            interval = max(0.1, expected_interval_cm)
+            px_per_cm = round(med_spacing / interval, 2)
+            return px_per_cm if px_per_cm >= 5.0 else None
+        except Exception as e:
+            print(f"[SPRS Mat Grid Detector Warning] {e}")
+            return None
+

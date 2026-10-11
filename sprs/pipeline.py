@@ -100,9 +100,9 @@ class SmartPackagingPipeline:
             "raw_object_dimensions": {
                 "length_cm": dims["length_cm"],
                 "width_cm": dims["width_cm"],
-                "height_cm": dims["height_cm"],
-                "volume_cm3": dims["volume_cm3"],
-                "dimensions_str": f"{dims['length_cm']} × {dims['width_cm']} × {dims['height_cm']} cm"
+                "height_cm": dims.get("height_cm", 0.0),
+                "volume_cm3": dims.get("volume_cm3", 0.0),
+                "dimensions_str": f"{dims['length_cm']} × {dims['width_cm']} cm"
             },
             "category_classification": {
                 "category": category,

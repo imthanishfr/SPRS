@@ -194,17 +194,31 @@ class ObjectDimensioner:
             for cnt in contours:
                 area = cv2.contourArea(cnt)
                 
-                # Rule 1: Exclude noise (< 600 px) or background table contours (> 45% of frame)
-                if area < 600 or area > (w_frame * h_frame * 0.45):
+                # Rule 1: Exclude noise / single grid lines or full table (> 45% of frame)
+                if area < 2000 or area > (w_frame * h_frame * 0.45):
                     continue
 
                 x, y, w, h = cv2.boundingRect(cnt)
                 
-                # Rule 2: Exclude contours touching outer frame border (margin of 15px)
+                # Rule 2: Minimum width and height for a packable physical item
+                if w < 25 or h < 25:
+                    continue
+
+                # Rule 3: Exclude contours touching outer frame border (margin of 15px)
                 if x <= 15 or y <= 15 or (x + w) >= (w_frame - 15) or (y + h) >= (h_frame - 15):
                     continue
 
-                # Rule 3: Score based on area compactness & closeness to center of view
+                # Rule 4: Filter out empty green/teal cutting mat background
+                crop_test = frame[y:y+h, x:x+w]
+                if crop_test.size > 0:
+                    hsv = cv2.cvtColor(crop_test, cv2.COLOR_BGR2HSV)
+                    # Cutting mat dark teal/green hue range (Hue 35 to 110, Saturation > 18)
+                    mat_mask = cv2.inRange(hsv, (35, 18, 18), (110, 255, 255))
+                    mat_pct = float(np.count_nonzero(mat_mask)) / float(w * h)
+                    if mat_pct > 0.45:
+                        continue  # Empty cutting mat grid area, skip!
+
+                # Rule 4: Score based on area compactness & closeness to center of view
                 box_center_x = x + w / 2.0
                 box_center_y = y + h / 2.0
                 dist_from_center = np.hypot(box_center_x - center_x, box_center_y - center_y)
@@ -220,7 +234,7 @@ class ObjectDimensioner:
         if best_box is not None:
             return self._process_bbox(frame, best_box, "object", 0.75, h_frame, w_frame)
 
-        return {"detected": False, "reason": "No clear item detected on table surface"}
+        return {"detected": False, "reason": "No object detected on measuring mat"}
 
     def _process_bbox(
         self,
@@ -259,9 +273,9 @@ class ObjectDimensioner:
         dim1_cm = round(w_px / self.pixels_per_cm, 1)
         dim2_cm = round(h_px / self.pixels_per_cm, 1)
 
+        # In top-down 2D view, camera strictly measures Length and Breadth / Width
         length_cm = max(dim1_cm, dim2_cm)
         width_cm = min(dim1_cm, dim2_cm)
-        height_cm = round(max(1.5, width_cm * 0.45), 1)
 
         return {
             "detected": True,
@@ -274,7 +288,7 @@ class ObjectDimensioner:
             "dimensions": {
                 "length_cm": length_cm,
                 "width_cm": width_cm,
-                "height_cm": height_cm,
-                "volume_cm3": round(length_cm * width_cm * height_cm, 2)
+                "height_cm": 0.0,  # Measured in Step 2 Side Tilt Scan
+                "volume_cm3": 0.0
             }
         }

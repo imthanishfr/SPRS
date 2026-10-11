@@ -13,7 +13,7 @@ import re
 import base64
 import cv2
 import numpy as np
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response, Request
 from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
@@ -142,9 +142,22 @@ def generate_mjpeg_stream():
             cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 3)
             
             raw_dims = rec["raw_object_dimensions"]
-            label = f"{cat} | {raw_dims['dimensions_str']}"
+            step = scan_state.get("step", 1)
+            
+            if step == 1:
+                # Step 1: Flat Scan -> Show ONLY Length and Breadth!
+                label = f"{cat} | {raw_dims['length_cm']} × {raw_dims['width_cm']} cm"
+            elif step == 2:
+                # Step 2: Side Profile Scan -> Show Height and Breadth!
+                stored_dims = scan_state.get("stored_flat_dims")
+                stored_w = stored_dims["width_cm"] if stored_dims else raw_dims["width_cm"]
+                tilt_h = raw_dims["width_cm"]  # Height measured from side profile
+                label = f"{cat} | Height: {tilt_h} cm × Breadth: {stored_w} cm"
+            else:
+                label = f"{cat} | {raw_dims.get('dimensions_str', '')}"
+
             if rec.get("perspective_corrected", False):
-                label += " [PERSPECTIVE CORRECTED]"
+                label += " [PERSPECTIVE]"
             
             font_scale = 0.85
             thickness = 2
@@ -252,18 +265,18 @@ def capture_step1():
 
 
 class CalibrationRequest(BaseModel):
-    camera_height_cm: float = 50.0
-    ref_length_cm: float = 6.02
-    ref_width_cm: float = 4.5
-    ref_height_cm: float = 2.5
+    camera_height_cm: float = 20.0
+    ref_length_cm: float = 1.0
+    ref_width_cm: float = 1.0
     custom_pixels_per_cm: Optional[float] = None
 
 
 class AutoCalibrateRequest(BaseModel):
     camera_height_cm: float = 20.0
-    ref_length_cm: float = 6.02
-    ref_width_cm: float = 4.5
-    ref_height_cm: float = 2.5
+    ref_length_cm: float = 1.0
+    ref_width_cm: float = 1.0
+    click_p1: Optional[List[float]] = None
+    click_p2: Optional[List[float]] = None
 
 
 @app.get("/api/check_tilt_alignment")
@@ -287,46 +300,116 @@ def check_tilt_alignment():
 @app.post("/api/auto_calibrate_from_camera")
 def auto_calibrate_from_camera(req: AutoCalibrateRequest):
     """
-    Detects the calibration test piece in the live camera feed and
-    computes the exact pixel-to-cm ratio so the measured object matches
-    the user's specified reference dimensions (e.g. 6.02 cm).
+    Computes exact pixel-to-cm ratio from measuring mat reference:
+    Either via 2 user clicked points on the mat grid or auto-detected test piece.
     """
     global async_pipeline, cam_stream
     if not async_pipeline or not async_pipeline.sync_pipeline:
         return {"status": "error", "message": "AI Pipeline initializing..."}
 
+    ref_l = max(0.1, req.ref_length_cm)
+    ref_w = max(0.1, req.ref_width_cm)
+
+    # 1. Direct interactive click points on measuring mat grid
+    if req.click_p1 and req.click_p2 and len(req.click_p1) == 2 and len(req.click_p2) == 2:
+        dx = float(req.click_p2[0] - req.click_p1[0])
+        dy = float(req.click_p2[1] - req.click_p1[1])
+        pixel_dist = float(np.sqrt(dx * dx + dy * dy))
+        if pixel_dist < 5.0:
+            return {"status": "error", "message": "Click points too close together. Click across at least 1 cm on the mat."}
+        
+        computed_px_cm = round(pixel_dist / ref_l, 2)
+        async_pipeline.sync_pipeline.calibration_mgr.save_config(
+            pixels_per_cm=computed_px_cm,
+            camera_height_cm=req.camera_height_cm
+        )
+        async_pipeline.sync_pipeline.dimensioner.pixels_per_cm = computed_px_cm
+        return {
+            "status": "success",
+            "mode": "click_points",
+            "detected_pixel_dim": round(pixel_dist, 1),
+            "ref_length_cm": ref_l,
+            "ref_width_cm": ref_w,
+            "pixels_per_cm": computed_px_cm,
+            "measured_dimensions_str": f"Length: {ref_l:.1f} cm | Breadth: {ref_w:.1f} cm"
+        }
+
+    # 2. Camera Stream Detection Mode
     ret, frame = cam_stream.read() if cam_stream else (False, None)
     if not ret or frame is None:
         return {"status": "error", "message": "Could not capture live camera frame."}
 
-    det = async_pipeline.sync_pipeline.dimensioner.detect_and_measure(frame)
-    if not det.get("detected", False):
+    from sprs.calibration import CalibrationManager
+
+    # If reference is 1.0 x 1.0 cm (or user calibrating directly with the Levin cutting mat grid)
+    # or general auto-detect, check if cutting mat grid lines are visible
+    mat_px_cm = CalibrationManager.detect_mat_grid_pixels_per_cm(frame, expected_interval_cm=1.0)
+    
+    if (ref_l == 1.0 and ref_w == 1.0 and mat_px_cm is not None) or (mat_px_cm is not None and not async_pipeline.sync_pipeline.dimensioner.detect_and_measure(frame).get("detected", False)):
+        async_pipeline.sync_pipeline.calibration_mgr.save_config(
+            pixels_per_cm=mat_px_cm,
+            camera_height_cm=req.camera_height_cm
+        )
+        async_pipeline.sync_pipeline.dimensioner.pixels_per_cm = mat_px_cm
         return {
-            "status": "error",
-            "message": "No test piece detected in camera view. Please place your test piece (e.g. earbuds box) on the packing surface under the camera."
+            "status": "success",
+            "mode": "mat_grid_auto",
+            "detected_pixel_dim": mat_px_cm,
+            "ref_length_cm": 1.0,
+            "ref_width_cm": 1.0,
+            "pixels_per_cm": mat_px_cm,
+            "measured_dimensions_str": f"Levin Cutting Mat Grid (1.0 cm = {mat_px_cm} px)"
         }
 
-    bbox = det["bbox_int"]
-    x1, y1, x2, y2 = bbox
-    pixel_w = abs(x2 - x1)
-    pixel_h = abs(y2 - y1)
-    max_pixel_dim = max(pixel_w, pixel_h)
+    # Otherwise, check for physical reference object on the mat
+    det = async_pipeline.sync_pipeline.dimensioner.detect_and_measure(frame)
+    if det.get("detected", False):
+        bbox = det["bbox_int"]
+        x1, y1, x2, y2 = bbox
+        pixel_w = abs(x2 - x1)
+        pixel_h = abs(y2 - y1)
+        max_pixel_dim = max(pixel_w, pixel_h)
+        min_pixel_dim = min(pixel_w, pixel_h)
 
-    target_ref_l = max(0.1, req.ref_length_cm)
-    computed_px_cm = round(max_pixel_dim / target_ref_l, 2)
+        target_max_ref = max(ref_l, ref_w)
+        computed_px_cm = round(max_pixel_dim / target_max_ref, 2)
 
-    async_pipeline.sync_pipeline.calibration_mgr.save_config(
-        pixels_per_cm=computed_px_cm,
-        camera_height_cm=req.camera_height_cm
-    )
-    async_pipeline.sync_pipeline.dimensioner.pixels_per_cm = computed_px_cm
+        async_pipeline.sync_pipeline.calibration_mgr.save_config(
+            pixels_per_cm=computed_px_cm,
+            camera_height_cm=req.camera_height_cm
+        )
+        async_pipeline.sync_pipeline.dimensioner.pixels_per_cm = computed_px_cm
+
+        return {
+            "status": "success",
+            "mode": "object_detect",
+            "detected_pixel_dim": max_pixel_dim,
+            "ref_length_cm": target_max_ref,
+            "ref_width_cm": min(ref_l, ref_w),
+            "pixels_per_cm": computed_px_cm,
+            "measured_dimensions_str": f"Length: {round(max_pixel_dim / computed_px_cm, 1)} cm | Breadth: {round(min_pixel_dim / computed_px_cm, 1)} cm"
+        }
+
+    # If cutting mat was detected as fallback
+    if mat_px_cm is not None:
+        async_pipeline.sync_pipeline.calibration_mgr.save_config(
+            pixels_per_cm=mat_px_cm,
+            camera_height_cm=req.camera_height_cm
+        )
+        async_pipeline.sync_pipeline.dimensioner.pixels_per_cm = mat_px_cm
+        return {
+            "status": "success",
+            "mode": "mat_grid_auto",
+            "detected_pixel_dim": mat_px_cm,
+            "ref_length_cm": 1.0,
+            "ref_width_cm": 1.0,
+            "pixels_per_cm": mat_px_cm,
+            "measured_dimensions_str": f"Levin Cutting Mat Grid (1.0 cm = {mat_px_cm} px)"
+        }
 
     return {
-        "status": "success",
-        "detected_pixel_dim": max_pixel_dim,
-        "ref_length_cm": target_ref_l,
-        "pixels_per_cm": computed_px_cm,
-        "measured_dimensions_str": f"{round(pixel_w / computed_px_cm, 1)} × {round(pixel_h / computed_px_cm, 1)} cm"
+        "status": "error",
+        "message": "No test piece or mat grid detected. Place object on the cutting mat or click 2 points on the mat grid above."
     }
 
 
@@ -349,8 +432,7 @@ def calibrate_custom(req: CalibrationRequest):
         "camera_height_cm": req.camera_height_cm,
         "ref_dims": {
             "length_cm": req.ref_length_cm,
-            "width_cm": req.ref_width_cm,
-            "height_cm": req.ref_height_cm
+            "width_cm": req.ref_width_cm
         }
     }
 

@@ -242,7 +242,7 @@ class CalibrationManager:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             blurred = cv2.GaussianBlur(gray, (5, 5), 0)
             edges = cv2.Canny(blurred, 40, 130)
-            lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=60, minLineLength=50, maxLineGap=12)
+            lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=70, minLineLength=70, maxLineGap=12)
             if lines is None or len(lines) < 8:
                 return None
             
@@ -266,12 +266,12 @@ class CalibrationManager:
                 coords = np.sort(coords)
                 clustered = [coords[0]]
                 for c in coords[1:]:
-                    if c - clustered[-1] > 6:
+                    if c - clustered[-1] > 10:
                         clustered.append(c)
                     else:
                         clustered[-1] = (clustered[-1] + c) / 2.0
                 diffs = np.diff(clustered)
-                return [float(d) for d in diffs if 8.0 < d < 250.0]
+                return [float(d) for d in diffs if 18.0 < d < 120.0]
 
             h_diffs = compute_spacing(h_lines)
             v_diffs = compute_spacing(v_lines)
@@ -280,14 +280,11 @@ class CalibrationManager:
                 return None
 
             med_spacing = float(np.median(all_diffs))
-            lower = [d for d in all_diffs if 0.45 * med_spacing <= d <= 0.75 * med_spacing]
-            if len(lower) >= 4:
-                med_spacing = float(np.median(lower))
-
             interval = max(0.1, expected_interval_cm)
             px_per_cm = round(med_spacing / interval, 2)
             return px_per_cm if px_per_cm >= 5.0 else None
         except Exception as e:
             print(f"[SPRS Mat Grid Detector Warning] {e}")
             return None
+
 

@@ -41,6 +41,11 @@ class ObjectDimensioner:
         if perspective_quad:
             self.set_perspective_quad(perspective_quad)
 
+    def update_calibration(self, new_pixels_per_cm: float):
+        """Update active pixel-to-cm ratio."""
+        self.pixels_per_cm = max(1.0, float(new_pixels_per_cm))
+        print(f"[SPRS Dimensioner] Calibration scale updated to: {self.pixels_per_cm:.2f} px/cm")
+
     def set_perspective_quad(self, quad_pts: Optional[List[List[float]]]):
         """
         Set 4-point quadrilateral for Homography Perspective Rectification.

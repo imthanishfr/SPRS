@@ -85,45 +85,57 @@ class CameraStream:
                 self.status_message = err_msg
                 return False
 
-        if isinstance(self.camera_source, str) and (self.camera_source.startswith("http") or self.camera_source.startswith("rtsp")):
-            url = self.camera_source
-            if not url.endswith("/stream") and not url.endswith("/video") and ":" not in url.split("//")[1]:
-                # Try default ESP32-CAM stream port 81
-                url = f"{url}:81/stream"
-                print(f"[SPRS Camera] Formatted URL to ESP32 stream: '{url}'")
-            self.cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
-        elif isinstance(self.camera_source, int):
-            self.cap = cv2.VideoCapture(self.camera_source, cv2.CAP_DSHOW)
-            if not self.cap or not self.cap.isOpened():
-                self.cap = cv2.VideoCapture(self.camera_source)
-        else:
-            self.cap = cv2.VideoCapture(self.camera_source)
-
-        if not self.cap or not self.cap.isOpened():
-            err_msg = f"Failed to open camera source '{self.camera_source}'."
-            print(f"[SPRS Camera Error] {err_msg}")
-            self.status_message = err_msg
-            return False
-
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self.cap = self._open_cv_capture()
         self.running = True
-        self.status_message = f"Stream Connected: '{self.camera_source}'"
+        self.status_message = f"Connecting to '{self.camera_source}'..."
         self.worker_thread = threading.Thread(target=self._grab_cv_frames, daemon=True)
         self.worker_thread.start()
 
         self.save_source(self.camera_source)
         time.sleep(0.3)
-        print("[SPRS Camera] Camera stream successfully connected.")
         return True
 
+    def _open_cv_capture(self) -> Optional[cv2.VideoCapture]:
+        try:
+            if isinstance(self.camera_source, str) and (self.camera_source.startswith("http") or self.camera_source.startswith("rtsp")):
+                url = self.camera_source
+                if not url.endswith("/stream") and not url.endswith("/video") and ":" not in url.split("//")[1]:
+                    url = f"{url}:81/stream"
+                cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+            elif isinstance(self.camera_source, int):
+                cap = cv2.VideoCapture(self.camera_source, cv2.CAP_DSHOW)
+                if not cap or not cap.isOpened():
+                    cap = cv2.VideoCapture(self.camera_source)
+            else:
+                cap = cv2.VideoCapture(self.camera_source)
+            if cap and cap.isOpened():
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                return cap
+        except Exception:
+            pass
+        return None
+
     def _grab_cv_frames(self):
-        while self.running and self.cap and self.cap.isOpened():
+        while self.running:
+            if not self.cap or not self.cap.isOpened():
+                self.cap = self._open_cv_capture()
+                if not self.cap or not self.cap.isOpened():
+                    time.sleep(1.0)
+                    continue
+                else:
+                    print(f"[SPRS Camera] Connected to camera source: '{self.camera_source}'")
+                    self.status_message = f"Stream Connected: '{self.camera_source}'"
+
             ret, frame = self.cap.read()
             if ret and frame is not None:
                 with self.lock:
                     self.latest_frame = frame
             else:
-                time.sleep(0.01)
+                time.sleep(0.05)
+                if self.cap:
+                    self.cap.release()
+                    self.cap = None
+
 
     def _grab_serial_frames(self):
         """Background thread reading JPEG frames or Serial log lines from COM port."""

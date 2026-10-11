@@ -560,6 +560,7 @@
 
     // INTERACTIVE CLICK-ON-MAT CALIBRATION (STEP 3)
     let clickedPoints = [];
+    let nativePoints = [];
     function initClickCanvas() {
       const clickCanvas = document.getElementById("click-canvas");
       const container = document.getElementById("capture-container");
@@ -568,18 +569,32 @@
       clickCanvas.width = container.clientWidth;
       clickCanvas.height = container.clientHeight;
       clickedPoints = [];
+      nativePoints = [];
 
       clickCanvas.onclick = (e) => {
         const rect = clickCanvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const displayX = e.clientX - rect.left;
+        const displayY = e.clientY - rect.top;
 
-        if (clickedPoints.length >= 2) clickedPoints = [];
-        clickedPoints.push([x, y]);
+        const img = document.getElementById("cal-capture-video-feed");
+        const natW = img && img.naturalWidth ? img.naturalWidth : 1920;
+        const natH = img && img.naturalHeight ? img.naturalHeight : 1080;
+        const scaleX = natW / rect.width;
+        const scaleY = natH / rect.height;
+
+        const nativeX = displayX * scaleX;
+        const nativeY = displayY * scaleY;
+
+        if (clickedPoints.length >= 2) {
+          clickedPoints = [];
+          nativePoints = [];
+        }
+        clickedPoints.push([displayX, displayY]);
+        nativePoints.push([nativeX, nativeY]);
 
         drawClicks();
 
-        if (clickedPoints.length === 2) {
+        if (nativePoints.length === 2) {
           submitClickCalibration();
         }
       };
@@ -618,6 +633,7 @@
 
     function resetClicks() {
       clickedPoints = [];
+      nativePoints = [];
       const clickCanvas = document.getElementById("click-canvas");
       if (clickCanvas) {
         const ctx = clickCanvas.getContext("2d");
@@ -640,8 +656,8 @@
             camera_height_cm: camH,
             ref_length_cm: refL,
             ref_width_cm: refW,
-            click_p1: clickedPoints[0],
-            click_p2: clickedPoints[1]
+            click_p1: nativePoints[0],
+            click_p2: nativePoints[1]
           })
         });
 

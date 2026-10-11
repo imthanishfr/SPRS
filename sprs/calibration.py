@@ -21,7 +21,7 @@ EARBUDS_CASE_LENGTH_CM = 6.02  # 60.2 mm
 class CalibrationManager:
     def __init__(self, config_path: str = CONFIG_FILE):
         self.config_path = config_path
-        self.pixels_per_cm: float = 71.0
+        self.pixels_per_cm: float = 78.5
         self.camera_height_cm: float = 22.0
         self.perspective_quad: Optional[List[List[float]]] = None
         self.load_config()
@@ -32,7 +32,7 @@ class CalibrationManager:
             try:
                 with open(self.config_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    self.pixels_per_cm = float(data.get("pixels_per_cm", 71.0))
+                    self.pixels_per_cm = float(data.get("pixels_per_cm", 78.5))
                     self.camera_height_cm = float(data.get("camera_height_cm", 22.0))
                     quad = data.get("perspective_quad")
                     if isinstance(quad, list) and len(quad) == 4:

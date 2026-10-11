@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from typing import Dict, Tuple, Any, Optional, List
 
-DEFAULT_PIXELS_PER_CM = 71.0
+DEFAULT_PIXELS_PER_CM = 78.5
 DEFAULT_CAMERA_HEIGHT_CM = 22.0
 
 

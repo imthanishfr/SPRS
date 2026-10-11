@@ -10,8 +10,8 @@ import cv2
 import numpy as np
 from typing import Dict, Tuple, Any, Optional, List
 
-DEFAULT_PIXELS_PER_CM = 15.0
-DEFAULT_CAMERA_HEIGHT_CM = 60.0
+DEFAULT_PIXELS_PER_CM = 71.0
+DEFAULT_CAMERA_HEIGHT_CM = 22.0
 
 
 class ObjectDimensioner:
@@ -237,6 +237,23 @@ class ObjectDimensioner:
                     best_box = (float(x), float(y), float(x + w), float(y + h))
 
         if best_box is not None:
+            # Refine boundaries to exclude cast shadows on cutting mat
+            bx1, by1, bx2, by2 = [int(v) for v in best_box]
+            obj_crop = frame[by1:by2, bx1:bx2]
+            if obj_crop.size > 0:
+                c_hsv = cv2.cvtColor(obj_crop, cv2.COLOR_BGR2HSV)
+                # Areas that are strictly not cutting mat (excluding shadows which retain mat green hue)
+                is_mat = cv2.inRange(c_hsv, (35, 12, 10), (115, 255, 255))
+                is_obj = cv2.bitwise_not(is_mat)
+                kernel_refine = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+                is_obj_clean = cv2.morphologyEx(is_obj, cv2.MORPH_OPEN, kernel_refine)
+                sub_cnts, _ = cv2.findContours(is_obj_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                if sub_cnts:
+                    largest_sub = max(sub_cnts, key=cv2.contourArea)
+                    if cv2.contourArea(largest_sub) > 1500:
+                        sx, sy, sw, sh = cv2.boundingRect(largest_sub)
+                        best_box = (float(bx1 + sx), float(by1 + sy), float(bx1 + sx + sw), float(by1 + sy + sh))
+
             return self._process_bbox(frame, best_box, "object", 0.75, h_frame, w_frame)
 
         return {"detected": False, "reason": "No object detected on measuring mat"}

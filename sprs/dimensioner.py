@@ -240,6 +240,10 @@ class ObjectDimensioner:
             # Refine boundaries to exclude cast shadows on cutting mat
             bx1, by1, bx2, by2 = [int(v) for v in best_box]
             obj_crop = frame[by1:by2, bx1:bx2]
+            rot_box_pts = None
+            measured_l_px = None
+            measured_w_px = None
+
             if obj_crop.size > 0:
                 c_hsv = cv2.cvtColor(obj_crop, cv2.COLOR_BGR2HSV)
                 # Areas that are strictly not cutting mat (excluding shadows which retain mat green hue)
@@ -250,11 +254,29 @@ class ObjectDimensioner:
                 sub_cnts, _ = cv2.findContours(is_obj_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                 if sub_cnts:
                     largest_sub = max(sub_cnts, key=cv2.contourArea)
-                    if cv2.contourArea(largest_sub) > 1500:
+                    if cv2.contourArea(largest_sub) > 1200:
+                        # Rotated Minimum Area Bounding Box for true physical dimensions (invariant to rotation)
+                        rect = cv2.minAreaRect(largest_sub)
+                        (rcx, rcy), (rw, rh), r_angle = rect
+                        measured_l_px = max(rw, rh)
+                        measured_w_px = min(rw, rh)
+                        
+                        # Compute rotated box points in frame coordinates
+                        box_pts = cv2.boxPoints(rect)
+                        box_pts[:, 0] += bx1
+                        box_pts[:, 1] += by1
+                        rot_box_pts = box_pts.tolist()
+
+                        # Upright bounding box for crop & badge placement
                         sx, sy, sw, sh = cv2.boundingRect(largest_sub)
                         best_box = (float(bx1 + sx), float(by1 + sy), float(bx1 + sx + sw), float(by1 + sy + sh))
 
-            return self._process_bbox(frame, best_box, "object", 0.75, h_frame, w_frame)
+            return self._process_bbox(
+                frame, best_box, "object", 0.75, h_frame, w_frame,
+                rot_box_pts=rot_box_pts,
+                custom_l_px=measured_l_px,
+                custom_w_px=measured_w_px
+            )
 
         return {"detected": False, "reason": "No object detected on measuring mat"}
 
@@ -265,7 +287,10 @@ class ObjectDimensioner:
         cls_name: str,
         conf: float,
         h_frame: int,
-        w_frame: int
+        w_frame: int,
+        rot_box_pts: Optional[List[List[float]]] = None,
+        custom_l_px: Optional[float] = None,
+        custom_w_px: Optional[float] = None
     ) -> Dict[str, Any]:
         """Apply EMA temporal smoothing and compute real-world cm dimensions."""
         x1, y1, x2, y2 = raw_bbox
@@ -289,11 +314,14 @@ class ObjectDimensioner:
         if crop.size == 0:
             crop = frame
 
-        w_px = max(1.0, float(ix2 - ix1))
-        h_px = max(1.0, float(iy2 - iy1))
-
-        dim1_cm = round(w_px / self.pixels_per_cm, 1)
-        dim2_cm = round(h_px / self.pixels_per_cm, 1)
+        if custom_l_px is not None and custom_w_px is not None:
+            dim1_cm = round(custom_l_px / self.pixels_per_cm, 1)
+            dim2_cm = round(custom_w_px / self.pixels_per_cm, 1)
+        else:
+            w_px = max(1.0, float(ix2 - ix1))
+            h_px = max(1.0, float(iy2 - iy1))
+            dim1_cm = round(w_px / self.pixels_per_cm, 1)
+            dim2_cm = round(h_px / self.pixels_per_cm, 1)
 
         # In top-down 2D view, camera strictly measures Length and Breadth / Width
         length_cm = max(dim1_cm, dim2_cm)
@@ -303,6 +331,7 @@ class ObjectDimensioner:
             "detected": True,
             "bbox_int": (ix1, iy1, ix2, iy2),
             "bbox_float": (sx1, sy1, sx2, sy2),
+            "rot_box_pts": rot_box_pts,
             "crop": crop,
             "yolo_class": cls_name,
             "confidence": round(conf, 2),
@@ -314,3 +343,4 @@ class ObjectDimensioner:
                 "volume_cm3": 0.0
             }
         }
+

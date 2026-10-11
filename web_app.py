@@ -137,9 +137,12 @@ def generate_mjpeg_stream():
             elif "Electronics" in cat:
                 color = (255, 165, 0)
 
-            # Draw bounding box
-            # Draw bounding box with thicker outline
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 3)
+            # Draw bounding box (rotated polygon if available, else upright rect)
+            if rec.get("rot_box_pts") is not None:
+                pts_arr = np.int32(rec["rot_box_pts"])
+                cv2.polylines(annotated, [pts_arr], True, color, 3)
+            else:
+                cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 3)
             
             raw_dims = rec["raw_object_dimensions"]
             step = scan_state.get("step", 1)
